@@ -1,4 +1,5 @@
-# This HLA takes a stream of bytes (preferably ascii characters) and combines individual frames into larger frames in an attempt to make text strings easier to read.
+# This HLA takes a stream of bytes (preferably ascii characters) and combines individual frames into larger
+# frames in an attempt to make text strings easier to read.
 # For example, this should make reading serial log messages much easier in the software.
 # It supports delimiting on special characters, and after a certain delay is detected between characters.
 # It supports the I2C, SPI, and Serial analyzers, although it's most useful for serial port messages.
@@ -45,11 +46,15 @@ class TextMessages(HighLevelAnalyzer):
 
     def clear_stored_message(self, frame):
         self.temp_frame = AnalyzerFrame('message', frame.start_time, frame.end_time, {
-            'str': ''
+            'str': '',
+            'hex': ''
         })
 
-    def append_char(self, char):
-        self.temp_frame.data["str"] += char
+    def append_str(self, str):
+        self.temp_frame.data["str"] += str
+
+    def append_hex(self, str):
+        self.temp_frame.data["hex"] += str
 
     def have_existing_message(self):
         if self.temp_frame is None:
@@ -80,6 +85,7 @@ class TextMessages(HighLevelAnalyzer):
         # SPI - delimit on Enable toggle. TODO: add support for the SPI analyzer to send Enable/disable frames, or at least a Packet ID to the low level analyzer.
 
         char = "unknown error."
+        hexVal = "unknown error."
 
         # setup initial result, if not present
         first_frame = False
@@ -91,6 +97,7 @@ class TextMessages(HighLevelAnalyzer):
         if frame.type == "data" and "data" in frame.data.keys():
             value = frame.data["data"][0]
             char = chr(value)
+            hexVal = format(value, 'X')
 
         # handle I2C address
         if frame.type == "address":
@@ -99,10 +106,12 @@ class TextMessages(HighLevelAnalyzer):
             if self.have_existing_message() == True:
                 ret = self.temp_frame
                 self.clear_stored_message(frame)
-                self.append_char("address: " + hex(value) + ";")
+                self.append_str("address: " + hex(value) + ";")
+                self.append_hex("address: " + hex(value) + ";")
                 return ret
             # append the address to the beginning of the new message
-            self.append_char("address: " + hex(value) + ";")
+            self.append_str("address: " + hex(value) + ";")
+            self.append_hex("address: " + hex(value) + ";")
             return None
 
         # handle I2C start condition
@@ -123,18 +132,22 @@ class TextMessages(HighLevelAnalyzer):
             char = ""
             if "miso" in frame.data.keys() and frame.data["miso"] != 0:
                 char += chr(frame.data["miso"])
+                hexVal += format(frame.data["miso"], 'X')
             if "mosi" in frame.data.keys() and frame.data["mosi"] != 0:
                 char += chr(frame.data["mosi"])
+                hexVal += format(frame.data["mosi"], 'X')
 
         # If we have a timeout event, commit the frame and make sure not to add the new frame after the delay, and add the current character to the next frame.
         if first_frame == False and self.temp_frame is not None:
             if self.temp_frame.end_time + maximum_delay < frame.start_time:
                 ret = self.temp_frame
                 self.clear_stored_message(frame)
-                self.append_char(char)
+                self.append_str(char)
+                self.append_hex(hexVal + " ")
                 return ret
 
-        self.append_char(char)
+        self.append_str(char)
+        self.append_hex(hexVal + " ")
         self.update_end_time(frame)
 
         # if the current character is a delimiter, commit it.
