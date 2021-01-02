@@ -41,7 +41,8 @@ class TextMessages(HighLevelAnalyzer):
     def __init__(self):
         self.delimiter = DELIMITER_CHOICES.get(self.delimiter_setting, '\n')
         self.result_types["message"] = {
-            'format': self.prefix + '{{{data.str}}}'
+            #'format': self.prefix + '{{{data.str}}}',
+            'format': self.prefix + '{{{data.hex}}}'
         }
 
     def clear_stored_message(self, frame):
