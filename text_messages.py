@@ -97,7 +97,7 @@ class TextMessages(HighLevelAnalyzer):
         if frame.type == "data" and "data" in frame.data.keys():
             value = frame.data["data"][0]
             char = chr(value)
-            hexVal = format(value, 'X')
+            hexVal = format(value, '02X')
 
         # handle I2C address
         if frame.type == "address":
@@ -132,10 +132,10 @@ class TextMessages(HighLevelAnalyzer):
             char = ""
             if "miso" in frame.data.keys() and frame.data["miso"] != 0:
                 char += chr(frame.data["miso"])
-                hexVal += format(frame.data["miso"], 'X')
+                hexVal += format(frame.data["miso"], '02X')
             if "mosi" in frame.data.keys() and frame.data["mosi"] != 0:
                 char += chr(frame.data["mosi"])
-                hexVal += format(frame.data["mosi"], 'X')
+                hexVal += format(frame.data["mosi"], '02X')
 
         # If we have a timeout event, commit the frame and make sure not to add the new frame after the delay, and add the current character to the next frame.
         if first_frame == False and self.temp_frame is not None:
