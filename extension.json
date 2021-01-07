@@ -1,13 +1,13 @@
 {
-  "name": "Text Messages",
+  "name": "Concatenator",
   "apiVersion": "1.0.0",
-  "author": "Mark Garrison",
+  "author": "Dennis Bemmann",
   "version": "0.1.4",
-  "description": "Merge multiple frames into a single frame based on delimiters and packet timeout",
+  "description": "Concatenates single bytes to multi-byte messages",
   "extensions": {
-    "Text Messages": {
+    "Concatenator": {
       "type": "HighLevelAnalyzer",
-      "entryPoint": "text_messages.TextMessages"
+      "entryPoint": "concatenator.Concatenator"
     }
   }
 }

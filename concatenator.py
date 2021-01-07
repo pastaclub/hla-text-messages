@@ -1,18 +1,22 @@
-# This HLA takes a stream of bytes (preferably ascii characters) and combines individual frames into larger
-# frames in an attempt to make text strings easier to read.
-# For example, this should make reading serial log messages much easier in the software.
-# It supports delimiting on special characters, and after a certain delay is detected between characters.
-# It supports the I2C, SPI, and Serial analyzers, although it's most useful for serial port messages.
+# This HLA combines a stream of bytes into multi-byte messages.
+# To detect the end of a message and the start of the next one, you can choose between timeouts or
+# delimiter bytes (or both).
+# Output can be displayed as HEX or ASCII.
+# Supported input protocols are I2C, SPI and Serial UART.
+
+# This HLA was forked from Mark Garrison's example HLA "Text Messages"
 
 # Settings constants.
 from saleae.analyzers import HighLevelAnalyzer, AnalyzerFrame, StringSetting, NumberSetting, ChoicesSetting
 from saleae.data import GraphTimeDelta
 
 MESSAGE_PREFIX_SETTING = 'Message Prefix (optional)'
-PACKET_TIMEOUT_SETTING = 'Packet Timeout [s]'
+PACKET_TIMEOUT_SETTING = 'Packet Timeout [µs]'
 PACKET_DELIMITER_SETTING = 'Packet Delimiter'
+DISPLAY_FORMAT_SETTING = 'Display Format'
 
 DELIMITER_CHOICES = {
+    'None': '',
     'New Line [\\n]': '\n',
     'Null [\\0]': '\0',
     'Space [\' \']': ' ',
@@ -20,16 +24,21 @@ DELIMITER_CHOICES = {
     'Tab [\\t]': '\t'
 }
 
+DISPLAY_FORMAT_CHOICES = {
+    'ASCII': 'ascii',
+    'HEX': 'hex'
+}
 
-class TextMessages(HighLevelAnalyzer):
+class Concatenator(HighLevelAnalyzer):
 
     temp_frame = None
     delimiter = '\n'
 
     # Settings:
     prefix = StringSetting(label='Message Prefix (optional)')
-    packet_timeout = NumberSetting(label='Packet Timeout [s]', min_value=1E-6, max_value=1E4)
+    packet_timeout = NumberSetting(label='Packet Timeout [µs]', min_value=1, max_value=1E10) # , default_value=30)
     delimiter_setting = ChoicesSetting(label='Packet Delimiter', choices=DELIMITER_CHOICES.keys())
+    display_format_setting = ChoicesSetting(label='Display Format', choices=DISPLAY_FORMAT_CHOICES.keys())
 
     # Base output formatting options:
     result_types = {
@@ -40,9 +49,9 @@ class TextMessages(HighLevelAnalyzer):
 
     def __init__(self):
         self.delimiter = DELIMITER_CHOICES.get(self.delimiter_setting, '\n')
+        self.display_format = DISPLAY_FORMAT_CHOICES.get(self.display_format_setting, 'hex')
         self.result_types["message"] = {
-            #'format': self.prefix + '{{{data.str}}}',
-            'format': self.prefix + '{{{data.hex}}}'
+            'format': self.prefix + ('{{{data.hex}}}' if self.display_format == 'hex' else '{{{data.str}}}')
         }
 
     def clear_stored_message(self, frame):
@@ -78,15 +87,16 @@ class TextMessages(HighLevelAnalyzer):
         # Not all of these are implemented yet, but we're working on it!
 
         # All protocols - use the delimiter specified in the settings.
-        delimiters = [self.delimiter]  # [ "\0", "\n", "\r", " " ]
+        delimiters = [] if self.delimiter == '' else [self.delimiter]
+
         # All protocols - delimit on a delay specified in the settings
         # consider frames further apart than this separate messages
-        maximum_delay = GraphTimeDelta(second=self.packet_timeout or 0.5E-3)
+        maximum_delay = GraphTimeDelta(second=self.packet_timeout * 0.000001 or 0.5E-3)
         # I2C - delimit on address byte
         # SPI - delimit on Enable toggle. TODO: add support for the SPI analyzer to send Enable/disable frames, or at least a Packet ID to the low level analyzer.
 
-        char = "unknown error."
-        hexVal = "unknown error."
+        char = "unknown error"
+        hexVal = "unknown error"
 
         # setup initial result, if not present
         first_frame = False
@@ -152,7 +162,7 @@ class TextMessages(HighLevelAnalyzer):
         self.update_end_time(frame)
 
         # if the current character is a delimiter, commit it.
-        if char in delimiters:
+        if (delimiters != []) and (char in delimiters):
             ret = self.temp_frame
             # leave the temp_frame blank, so the next frame is the beginning of the next message.
             self.temp_frame = None
