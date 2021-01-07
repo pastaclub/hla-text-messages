@@ -2,7 +2,7 @@
   "name": "Concatenator",
   "apiVersion": "1.0.0",
   "author": "Dennis Bemmann",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Concatenates single bytes to multi-byte messages",
   "extensions": {
     "Concatenator": {
