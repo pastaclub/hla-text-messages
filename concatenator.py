@@ -141,12 +141,12 @@ class Concatenator(HighLevelAnalyzer):
         # handle SPI byte
         if frame.type == "result":
             char = ""
-            if "miso" in frame.data.keys() and frame.data["miso"] != 0:
-                char += chr(frame.data["miso"])
-                hexVal += format(frame.data["miso"], '02X')
-            if "mosi" in frame.data.keys() and frame.data["mosi"] != 0:
-                char += chr(frame.data["mosi"])
-                hexVal += format(frame.data["mosi"], '02X')
+            if "miso" in frame.data.keys() and frame.data["miso"][0] != 0:
+                char += chr(frame.data["miso"][0])
+                hexVal += format(frame.data["miso"][0], '02X')
+            if "mosi" in frame.data.keys() and frame.data["mosi"][0] != 0:
+                char += chr(frame.data["mosi"][0])
+                hexVal += format(frame.data["mosi"][0], '02X')
 
         # If we have a timeout event, commit the frame and make sure not to add the new frame after the delay, and add the current character to the next frame.
         if first_frame == False and self.temp_frame is not None:
