@@ -57,14 +57,26 @@ class Concatenator(HighLevelAnalyzer):
     def clear_stored_message(self, frame):
         self.temp_frame = AnalyzerFrame('message', frame.start_time, frame.end_time, {
             'str': '',
-            'hex': ''
+            'hex': '',
+            'mosi_str': '',
+            'mosi_hex': '',
+            'miso_str': '',
+            'miso_hex': '',
         })
 
-    def append_str(self, str):
-        self.temp_frame.data["str"] += str
+    def append(self, dataType, char, hexVal, mosiChar, mosiHexVal, misoChar, misoHexVal):
+        if dataType == "onedir":
+            self.temp_frame.data["str"] += char
+            self.temp_frame.data["hex"] += hexVal + " "
+        if dataType == "spi":
+            self.temp_frame.data["mosi_str"] += mosiChar
+            self.temp_frame.data["mosi_hex"] += mosiHexVal + " "
+            self.temp_frame.data["miso_str"] += misoChar
+            self.temp_frame.data["miso_hex"] += misoHexVal + " "
 
-    def append_hex(self, str):
-        self.temp_frame.data["hex"] += str
+    def remove_empty_fields(self, frame):
+        frame.data = dict(filter(lambda el: el[1] != '', frame.data.items()))
+        return frame
 
     def have_existing_message(self):
         if self.temp_frame is None:
@@ -95,8 +107,13 @@ class Concatenator(HighLevelAnalyzer):
         # I2C - delimit on address byte
         # SPI - delimit on Enable toggle. TODO: add support for the SPI analyzer to send Enable/disable frames, or at least a Packet ID to the low level analyzer.
 
+        dataType = "none"
         char = "unknown error"
         hexVal = "unknown error"
+        mosiChar = "unknown error"
+        mosiHexVal = "unknown error"
+        misoChar = "unknown error"
+        misoHexVal = "unknown error"
 
         # setup initial result, if not present
         first_frame = False
@@ -106,6 +123,7 @@ class Concatenator(HighLevelAnalyzer):
 
         # handle serial data and I2C data
         if frame.type == "data" and "data" in frame.data.keys():
+            dataType = "onedir"
             value = frame.data["data"][0]
             char = chr(value)
             hexVal = format(value, '02X')
@@ -117,12 +135,13 @@ class Concatenator(HighLevelAnalyzer):
             if self.have_existing_message() == True:
                 ret = self.temp_frame
                 self.clear_stored_message(frame)
-                self.append_str("address: " + hex(value) + ";")
-                self.append_hex("address: " + hex(value) + ";")
+                self.temp_frame.data["str"] += "address: " + hex(value) + ";"
+                self.temp_frame.data["hex"] += "address: " + hex(value) + ";"
+                ret = self.remove_empty_fields(ret)
                 return ret
             # append the address to the beginning of the new message
-            self.append_str("address: " + hex(value) + ";")
-            self.append_hex("address: " + hex(value) + ";")
+            self.temp_frame.data["str"] += "address: " + hex(value) + ";"
+            self.temp_frame.data["hex"] += "address: " + hex(value) + ";"
             return None
 
         # handle I2C start condition
@@ -134,31 +153,35 @@ class Concatenator(HighLevelAnalyzer):
             if self.have_existing_message() == True:
                 ret = self.temp_frame
                 self.temp_frame = None
+                ret = self.remove_empty_fields(ret)
                 return ret
             self.temp_frame = None
             return
 
         # handle SPI byte
         if frame.type == "result":
-            char = ""
-            if "miso" in frame.data.keys() and frame.data["miso"][0] != 0:
-                char += chr(frame.data["miso"][0])
-                hexVal += format(frame.data["miso"][0], '02X')
-            if "mosi" in frame.data.keys() and frame.data["mosi"][0] != 0:
-                char += chr(frame.data["mosi"][0])
-                hexVal += format(frame.data["mosi"][0], '02X')
+            dataType = "spi"
+            mosiChar = ""
+            mosiHexVal = ""
+            misoChar = ""
+            misoHexVal = ""
+            if "miso" in frame.data.keys():
+                misoChar += chr(frame.data["miso"][0])
+                misoHexVal += format(frame.data["miso"][0], '02X')
+            if "mosi" in frame.data.keys():
+                mosiChar += chr(frame.data["mosi"][0])
+                mosiHexVal += format(frame.data["mosi"][0], '02X')
 
         # If we have a timeout event, commit the frame and make sure not to add the new frame after the delay, and add the current character to the next frame.
         if first_frame == False and self.temp_frame is not None:
             if self.temp_frame.end_time + maximum_delay < frame.start_time:
                 ret = self.temp_frame
                 self.clear_stored_message(frame)
-                self.append_str(char)
-                self.append_hex(hexVal + " ")
+                self.append(dataType, char, hexVal, mosiChar, mosiHexVal, misoChar, misoHexVal)
+                ret = self.remove_empty_fields(ret)
                 return ret
 
-        self.append_str(char)
-        self.append_hex(hexVal + " ")
+        self.append(dataType, char, hexVal, mosiChar, mosiHexVal, misoChar, misoHexVal)
         self.update_end_time(frame)
 
         # if the current character is a delimiter, commit it.
@@ -166,4 +189,5 @@ class Concatenator(HighLevelAnalyzer):
             ret = self.temp_frame
             # leave the temp_frame blank, so the next frame is the beginning of the next message.
             self.temp_frame = None
+            ret = self.remove_empty_fields(ret)
             return ret
